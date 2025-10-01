@@ -1,6 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import { Stack } from "expo-router"
-import { useEffect } from "react"
 import { UserProvider } from "../contexts/UserContext"
 
 export const unstable_settings = {
@@ -8,19 +6,6 @@ export const unstable_settings = {
 }
 
 export default function App() {
-  useEffect(() => {
-    const checkLoginStatus = async () => {
-      try {
-        const userData = await AsyncStorage.getItem("@user_data")
-        console.log("Stored user data:", userData)
-      } catch (error) {
-        console.error("Error checking login status:", error)
-      }
-    }
-
-    checkLoginStatus()
-  }, [])
-
   return (
     <UserProvider>
       <Stack

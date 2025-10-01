@@ -1,6 +1,7 @@
 import type React from "react"
 import { createContext, useState, useContext, useEffect } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
+import { FirebaseAuthService, AuthUser } from "../services/firebaseAuth"
 
 type User = {
   id: string
@@ -11,7 +12,8 @@ type User = {
 
 type UserContextType = {
   user: User | null
-  login: (userData: User) => Promise<void>
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name: string) => Promise<void>
   logout: () => Promise<void>
   isLoading: boolean
   darkMode: boolean
@@ -21,6 +23,7 @@ type UserContextType = {
 const UserContext = createContext<UserContextType>({
   user: null,
   login: async () => {},
+  register: async () => {},
   logout: async () => {},
   isLoading: true,
   darkMode: true,
@@ -35,24 +38,28 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [darkMode, setDarkModeState] = useState(true)
 
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadUserPreferences = async () => {
       try {
-        const userData = await AsyncStorage.getItem("@user_data")
-        if (userData) {
-          setUser(JSON.parse(userData))
-        }
         const prefs = await AsyncStorage.getItem("@user_preferences")
         if (prefs) {
           const parsed = JSON.parse(prefs)
           if (typeof parsed.darkMode === "boolean") setDarkModeState(parsed.darkMode)
         }
       } catch (error) {
-        console.error("Erro ao carregar dados do usuário ou preferências:", error)
-      } finally {
-        setIsLoading(false)
+        console.error("Erro ao carregar preferências:", error)
       }
     }
-    loadUserData()
+
+    // Configurar observer do Firebase Auth
+    const unsubscribe = FirebaseAuthService.onAuthStateChanged((authUser: AuthUser | null) => {
+      setUser(authUser)
+      setIsLoading(false)
+    })
+
+    loadUserPreferences()
+
+    // Cleanup
+    return () => unsubscribe()
   }, [])
 
   const setDarkMode = (value: boolean) => {
@@ -64,25 +71,49 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
   }
 
-  const login = async (userData: User) => {
+  const login = async (email: string, password: string) => {
     try {
-      await AsyncStorage.setItem("@user_data", JSON.stringify(userData))
-      setUser(userData)
+      const authUser = await FirebaseAuthService.login(email, password)
+      // O observer já atualizará o estado do usuário
     } catch (error) {
-      console.error("Erro ao salvar dados do usuário:", error)
+      console.error("Erro ao fazer login:", error)
+      throw error
+    }
+  }
+
+  const register = async (email: string, password: string, name: string) => {
+    try {
+      const authUser = await FirebaseAuthService.register(email, password, name)
+      // O observer já atualizará o estado do usuário
+    } catch (error) {
+      console.error("Erro ao registrar:", error)
       throw error
     }
   }
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem("@user_data")
-      setUser(null)
+      await FirebaseAuthService.logout()
+      // O observer já atualizará o estado do usuário para null
     } catch (error) {
       console.error("Erro ao fazer logout:", error)
       throw error
     }
   }
 
-  return <UserContext.Provider value={{ user, login, logout, isLoading, darkMode, setDarkMode }}>{children}</UserContext.Provider>
+  return (
+    <UserContext.Provider 
+      value={{ 
+        user, 
+        login, 
+        register, 
+        logout, 
+        isLoading, 
+        darkMode, 
+        setDarkMode 
+      }}
+    >
+      {children}
+    </UserContext.Provider>
+  )
 }

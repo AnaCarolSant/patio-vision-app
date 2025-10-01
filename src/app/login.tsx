@@ -17,16 +17,8 @@ import {
 import Input from "../components/Input"
 import { useUser } from "../contexts/UserContext"
 
-interface UserAccount {
-  id: string
-  name: string
-  email: string
-  password: string
-  role: "operator" | "admin"
-}
-
 const LoginScreen = () => {
-  const { login, darkMode } = useUser()
+  const { login, register, darkMode } = useUser()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -114,55 +106,15 @@ const LoginScreen = () => {
     return Object.keys(newErrors).length === 0
   }
 
-  const getRegisteredAccounts = async (): Promise<UserAccount[]> => {
-    try {
-      const accountsJson = await AsyncStorage.getItem("@user_accounts")
-      if (accountsJson) {
-        return JSON.parse(accountsJson)
-      }
-      return []
-    } catch (error) {
-      console.error("Erro ao buscar contas:", error)
-      return []
-    }
-  }
-
-
-  const saveAccounts = async (accounts: UserAccount[]) => {
-    try {
-      await AsyncStorage.setItem("@user_accounts", JSON.stringify(accounts))
-    } catch (error) {
-      console.error("Erro ao salvar contas:", error)
-      throw error
-    }
-  }
-
-
-  const isEmailRegistered = async (emailToCheck: string): Promise<boolean> => {
-    const accounts = await getRegisteredAccounts()
-    return accounts.some((account) => account.email.toLowerCase() === emailToCheck.toLowerCase())
-  }
-
   const handleLogin = async () => {
     if (!validateLogin()) return
 
     setIsLoading(true)
 
     try {
-
-      const accounts = await getRegisteredAccounts()
-
-      const account = accounts.find(
-        (acc) => acc.email.toLowerCase() === email.toLowerCase() && acc.password === password,
-      )
-
-      if (!account) {
-        Alert.alert("Erro", "E-mail ou senha incorretos. Tente novamente.")
-        setIsLoading(false)
-        return
-      }
-
-
+      await login(email, password)
+      
+      // Salvar credenciais se "Lembrar de mim" estiver marcado
       if (rememberMe) {
         await AsyncStorage.setItem("@saved_email", email)
         await AsyncStorage.setItem("@remember_me", "true")
@@ -171,20 +123,9 @@ const LoginScreen = () => {
         await AsyncStorage.removeItem("@remember_me")
       }
 
-
-      if (account.role === "operator" || account.role === "admin") {
-        await login(account)
-      } else {
-        Alert.alert("Erro", "Tipo de usuário não permitido para login.")
-        setIsLoading(false)
-        return
-      }
-
-
       router.replace("/")
-    } catch (error) {
-      Alert.alert("Erro", "Falha ao fazer login. Tente novamente.")
-      console.error(error)
+    } catch (error: any) {
+      Alert.alert("Erro", error.message || "Falha ao fazer login. Tente novamente.")
     } finally {
       setIsLoading(false)
     }
@@ -196,42 +137,18 @@ const LoginScreen = () => {
     setIsLoading(true)
 
     try {
-      const emailExists = await isEmailRegistered(email)
-
-      if (emailExists) {
-        Alert.alert("Erro", "Este e-mail já está cadastrado. Tente fazer login ou use outro e-mail.")
-        setIsLoading(false)
-        return
-      }
-
-      const accounts = await getRegisteredAccounts()
-
-      const newAccount: UserAccount = {
-        id: Date.now().toString(),
-        name,
-        email,
-        password,
-        role: "operator",
-      }
-
-
-      accounts.push(newAccount)
-
-      await saveAccounts(accounts)
-
-      Alert.alert("Sucesso", "Cadastro realizado com sucesso! Você já pode fazer login.", [
+      await register(email, password, name)
+      
+      Alert.alert("Sucesso", "Cadastro realizado com sucesso! Você já está logado.", [
         {
           text: "OK",
           onPress: () => {
-            setIsLoginMode(true)
-            setName("")
-            setConfirmPassword("")
+            router.replace("/")
           },
         },
       ])
-    } catch (error) {
-      Alert.alert("Erro", "Falha ao realizar cadastro. Tente novamente.")
-      console.error(error)
+    } catch (error: any) {
+      Alert.alert("Erro", error.message || "Falha ao realizar cadastro. Tente novamente.")
     } finally {
       setIsLoading(false)
     }
